@@ -1,6 +1,6 @@
 # **********************************************************************
 #
-# Copyright (c) 2003-2015 ZeroC, Inc. All rights reserved.
+# Copyright (c) 2003-2016 ZeroC, Inc. All rights reserved.
 #
 # This copy of Ice is licensed to you under the terms described in the
 # ICE_LICENSE file included in this distribution.
@@ -9,7 +9,7 @@
 
 Gem::Specification.new do |s|
   s.name        = 'zeroc-ice-x64-mingw'
-  s.version     = '3.7.0'
+  s.version     = '3.7a3'
   s.summary     = "ZeroC Ice for Ruby"
   s.description = <<-eos
 The Internet Communications Engine (Ice) provides a robust, proven
@@ -36,5 +36,5 @@ eos
   s.license     = 'GPL v2 with exceptions'
   s.rdoc_options = %w[--exclude=IceRuby.so$ --exclude=lib/slice2rb$]
   s.executables << 'slice2rb'
-  s.required_ruby_version = '~> 2.1' 
+  s.required_ruby_version = '~> 2.1'
 end

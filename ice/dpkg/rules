@@ -12,11 +12,11 @@ export CLASSPATH=/usr/share/java/proguard.jar
 export GRADLE_HOME=$(HOME)/.gradle
 export GRADLE = ./gradlew -g $(GRADLE_HOME)
 
-PACKAGE_NAMES = zeroc-ice \
-	zeroc-ice-dev \
+PACKAGE_NAMES = \
+	zeroc-ice-all-runtime \
+	zeroc-ice-all-dev \
 	zeroc-ice-slice \
 	libzeroc-ice3.7 \
-	php5-zeroc-ice \
 	zeroc-glacier2 \
 	zeroc-icebox \
 	zeroc-icegrid \
@@ -25,90 +25,87 @@ PACKAGE_NAMES = zeroc-ice \
 	zeroc-ice-utils \
 	zeroc-ice-utils-java \
 	libzeroc-ice-dev \
+	libzeroc-ice-java-dev \
 	libzeroc-ice-java \
-	php5-zeroc-ice-dev
+	libzeroc-ice-java-compat
 
-CPP11_DESTDIR = $(CURDIR)/debian/tmp-cpp11
-CPP11_LIB_NAMES = 	libGlacier2 \
-	libIce \
-	libIceBox \
-	libIceDB \
-	libIceDiscovery \
-	libIceGrid \
-	libIceLocatorDiscovery \
-	libIcePatch2 \
-	libIceSSL \
-	libIceStorm \
-	libIceStormService \
-	libIceUtil \
-	libIceXML
+VERSION = 3.7a3
+JAR_VERSION = 3.7.0-alpha3
 
-VERSION = 3.7.0
-
-ARTIFACT_NAMES = glacier2 \
+ARTIFACT_NAMES = \
+	glacier2 \
 	ice \
 	icebox \
 	icediscovery \
 	icegrid \
 	icelocatordiscovery \
 	icepatch2 \
-	icestorm
-
-ifeq ($(DEB_HOST_MULTIARCH),i386-linux-gnu)
-ICEBOX = icebox32
-else
-ICEBOX = icebox
-endif
+	icestorm \
+	glacier2-compat \
+	ice-compat \
+	icebox-compat \
+	icediscovery-compat \
+	icegrid-compat \
+	icelocatordiscovery-compat \
+	icepatch2-compat \
+	icestorm-compat
 
 DESTDIR=$(CURDIR)/debian/tmp
 ifeq (,$(findstring noopt,$(DEB_BUILD_OPTIONS)))
-	OPTIMIZE=yes
+    OPTIMIZE=yes
+else
+    OPTIMIZE=no
 endif
 
 ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
-	MAKEFLAGS += -j$(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
+    MAKEFLAGS += -j$(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
 else
-	PROCESSORS := $(shell cat /proc/cpuinfo | grep processor | wc -l)
-	ifneq ($(PROCESSORS),0)
-	    MAKEFLAGS += -j$(PROCESSORS)
-	endif
+    PROCESSORS := $(shell cat /proc/cpuinfo | grep processor | wc -l)
+    ifneq ($(PROCESSORS),0)
+        MAKEFLAGS += -j$(PROCESSORS)
+    endif
+endif
+
+DHARGS = --parallel --with javahelper --with systemd
+
+LANGUAGES = cpp
+ifeq ($(DEB_HOST_ARCH),amd64)
+    ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
+	# DHARGS += --with php
+	# DEB_BUILD_PROFILES += with-php
+	# PACKAGE_NAMES += php-zeroc-ice php-zeroc-ice-dev
+	# LANGUAGES += php
+    else
+	DHARGS += --with php5
+	DEB_BUILD_PROFILES += with-php5
+	PACKAGE_NAMES += php5-zeroc-ice php5-zeroc-ice-dev
+	LANGUAGES += php
+    endif
 endif
 
 prefix = /usr
-MAKEOPTS = prefix=$(prefix) OPTIMIZE=$(OPTIMIZE)
-
-icebox_install:
-	@echo usr/bin/$(ICEBOX) > $(CURDIR)/debian/zeroc-icebox.install
-	@echo usr/bin/$(ICEBOX)++11 >> $(CURDIR)/debian/zeroc-icebox.install
-	@echo usr/share/man/man1/icebox.1 >> $(CURDIR)/debian/zeroc-icebox.install
+MAKEOPTS = prefix=$(prefix) embedded_runpath=no OPTIMIZE=$(OPTIMIZE) PLATFORMS=$(DEB_HOST_ARCH)
 
 %:
-	dh $@ --parallel --with php5 --with javahelper --with systemd
+	dh $@ $(DHARGS)
 
 override_dh_auto_build-arch:
-	if [ ! -d cpp11 ]; then cp -r cpp cpp11; fi
-	$(MAKE) $(MAKEOPTS) -C cpp/src
-	$(MAKE) $(MAKEOPTS) -C php/src
-	$(MAKE) $(MAKEOPTS) -C cpp11/src CPP11=yes LD_LIBRARY_PATH=$(CURDIR)/cpp11/lib/$(DEB_HOST_MULTIARCH)
+	$(MAKE) $(MAKEOPTS) LANGUAGES="$(LANGUAGES)" CONFIGS="shared cpp11-shared" srcs
 
 override_dh_auto_build-indep:
-	$(MAKE) $(MAKEOPTS) -C java dist
+	$(MAKE) $(MAKEOPTS) LANGUAGES="java java-compat" srcs
 
 override_dh_auto_install-arch:
-	$(MAKE) $(MAKEOPTS) -C cpp DESTDIR=$(DESTDIR) install
-	$(MAKE) $(MAKEOPTS) -C php DESTDIR=$(DESTDIR) install
-	$(MAKE) $(MAKEOPTS) -C cpp11 DESTDIR=$(CPP11_DESTDIR) CPP11=yes install
+	$(MAKE) $(MAKEOPTS) LANGUAGES="$(LANGUAGES)" CONFIGS="shared cpp11-shared" DESTDIR=$(DESTDIR) install
 
 override_dh_auto_install-indep:
-	$(MAKE) $(MAKEOPTS) -C java DESTDIR=$(DESTDIR) install
+	$(MAKE) $(MAKEOPTS) DESTDIR=$(DESTDIR) LANGUAGES="java java-compat" install
 
 override_dh_auto_clean-arch:
-	$(MAKE) $(MAKEOPTS) -C cpp/src clean
-	$(MAKE) $(MAKEOPTS) -C php/src clean
-	if [ -d cpp11 ]; then $(MAKE) $(MAKEOPTS) -C cpp11/src CPP11=yes clean; fi
+	$(MAKE) $(MAKEOPTS) LANGUAGES="$(LANGUAGES)" distclean
 
 override_dh_auto_clean-indep:
-	$(MAKE) $(MAKEOPTS) -C java clean
+	$(MAKE) $(MAKEOPTS) LANGUAGES="java java-compat" clean
 
 override_dh_auto_test:
 
@@ -117,7 +114,7 @@ override_dh_installinit:
 	dh_installinit --noscripts --name icegridnode
 	dh_installinit --noscripts --name glacier2router
 
-override_dh_install: icebox_install
+override_dh_install:
 
 	#
 	# Install Maven artifact
@@ -126,30 +123,14 @@ override_dh_install: icebox_install
 	do \
 		cd $(CURDIR) ; \
 		mkdir -p $(DESTDIR)$(prefix)/share/maven-repo/com/zeroc/$$name/$(VERSION) ; \
-		mv $(DESTDIR)$(prefix)/share/java/$$name-$(VERSION).pom $(DESTDIR)$(prefix)/share/maven-repo/com/zeroc/$$name/$(VERSION) ; \
-		cd $(DESTDIR)$(prefix)/share/maven-repo/com/zeroc/$$name/$(VERSION) && ln -s ../../../../../java/$$name-$(VERSION).jar . ; \
-		cd $(DESTDIR)$(prefix)/share/maven-repo/com/zeroc/$$name/$(VERSION) && ln -s ../../../../../java/$$name-$(VERSION)-source.jar . ; \
+		mv $(DESTDIR)$(prefix)/share/java/$$name-$(JAR_VERSION).pom $(DESTDIR)$(prefix)/share/maven-repo/com/zeroc/$$name/$(VERSION) ; \
+		cd $(DESTDIR)$(prefix)/share/maven-repo/com/zeroc/$$name/$(VERSION) && ln -s ../../../../../java/$$name-$(JAR_VERSION).jar . ; \
+		cd $(DESTDIR)$(prefix)/share/maven-repo/com/zeroc/$$name/$(VERSION) && ln -s ../../../../../java/$$name-$(JAR_VERSION)-sources.jar . ; \
 	done ;
-
-	mkdir -p $(DESTDIR)$(prefix)/lib/$(DEB_HOST_MULTIARCH)/c++11
-
-	#
-	# Move C++11 libraries and binaries to their locations
-	#
-	for name in $(CPP11_LIB_NAMES) ; \
-	do \
-		cp $(CPP11_DESTDIR)$(prefix)/lib/$(DEB_HOST_MULTIARCH)/$$name++11*.so* $(DESTDIR)$(prefix)/lib/$(DEB_HOST_MULTIARCH) ; \
-		cp $(CPP11_DESTDIR)$(prefix)/lib/$(DEB_HOST_MULTIARCH)/c++11/$$name.so $(DESTDIR)$(prefix)/lib/$(DEB_HOST_MULTIARCH)/c++11/$$name.so ; \
-	done ;
-
-	cp $(CPP11_DESTDIR)$(prefix)/bin/$(ICEBOX)++11 $(DESTDIR)$(prefix)/bin/$(ICEBOX)++11
 
 	mkdir -p $(DESTDIR)$(prefix)/bin
 	cp debian/zeroc-ice-utils-java.icegridgui $(DESTDIR)$(prefix)/bin/icegridgui && \
 	chmod 755 $(DESTDIR)$(prefix)/bin/icegridgui
-
-	mkdir -p $(DESTDIR)/etc/php5/mods-available
-
 	mkdir -p $(DESTDIR)/etc
 	cp debian/zeroc-glacier2.glacier2router.conf $(DESTDIR)/etc/glacier2router.conf
 	cp debian/zeroc-icegrid.icegridnode.conf $(DESTDIR)/etc/icegridnode.conf
@@ -168,14 +149,11 @@ override_dh_install: icebox_install
 	#
 	for name in $(PACKAGE_NAMES) ; \
 	do \
-		mkdir -p $(DESTDIR)$(prefix)/share/doc/$$name ; \
-		cp debian/README $(DESTDIR)$(prefix)/share/doc/$$name/README ; \
+		dh_install -p$$name debian/README $(prefix)/share/doc/$$name ; \
 	done ;
-
-	cp debian/JGOODIES_LICENSE $(DESTDIR)$(prefix)/share/doc/zeroc-ice-utils-java/JGOODIES_LICENSE
+	dh_install -p zeroc-ice-utils-java debian/JGOODIES_LICENSE $(prefix)/share/doc/zeroc-ice-utils-java
 
 override_dh_clean:
 	dh_clean
-	rm -rf cpp11
 	rm -rf java/.gradle
-	rm -rf debian/tmp-cpp11
+	rm -rf java-compat/.gradle

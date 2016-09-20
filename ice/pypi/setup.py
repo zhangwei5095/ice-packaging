@@ -1,6 +1,6 @@
 # **********************************************************************
 #
-# Copyright (c) 2003-2015 ZeroC, Inc. All rights reserved.
+# Copyright (c) 2003-2016 ZeroC, Inc. All rights reserved.
 #
 # **********************************************************************
 
@@ -18,6 +18,8 @@ if platform[:6] == 'darwin':
     platform = 'darwin'
 elif platform[:5] == 'linux':
     platform = 'linux'
+elif platform[:7] == 'freebsd':
+    platform = 'freebsd'
 
 use_ice = False
 if "--with-installed-ice" in sys.argv:
@@ -41,7 +43,7 @@ if use_ice:
     include_dirs=['src']
     define_macros=[]
 else:
-    include_dirs=['src', 'src/ice/cpp/include', 'src/ice/cpp/src']
+    include_dirs=['src', 'src/ice/cpp/include', 'src/ice/cpp/include/generated', 'src/ice/cpp/src']
     define_macros=[('ICE_STATIC_LIBS', None)]
 
 if platform == 'darwin':
@@ -54,32 +56,6 @@ if platform == 'darwin':
     else:
         libraries=['iconv']
         extra_link_args = ['-framework','Security', '-framework','CoreFoundation']
-
-    def filterName(path):
-        d = os.path.dirname(path)
-        if use_ice and d.find("src/ice/") != -1:
-            return False
-        if d.find('bzip2') != -1:
-            return False # Don't compile the bzip2 source under darwin or linux.
-        return True
-
-elif platform == 'linux':
-
-    #
-    # TODO: Get rid of this hack to remove -Wstrict-prototypes from the compiler options
-    # when http://bugs.python.org/issue1222585 is fixed. Note that this hack doesn't work
-    # with recent distutils versions which no longer allow overriding OPT in the env.
-    #
-    from distutils.sysconfig import get_config_vars
-    (opt,) = get_config_vars('OPT')
-    os.environ['OPT'] = " ".join(flag for flag in opt.split() if flag != '-Wstrict-prototypes')
-
-    extra_compile_args.append('-w')
-    extra_link_args = []
-    if use_ice:
-        libraries = ["IceSSL", "Ice", "Slice", "IceUtil"]
-    else:
-        libraries=['ssl', 'crypto', 'bz2', 'rt', 'dl']
 
     def filterName(path):
         d = os.path.dirname(path)
@@ -104,13 +80,41 @@ elif platform == 'win32':
     extra_compile_args.append('/wd4251')
     extra_compile_args.append('/wd4275')
     extra_compile_args.append('/wd4996')
-    libraries=['dbghelp','rpcrt4','advapi32','Iphlpapi','secur32','crypt32','ws2_32']
+    libraries=['dbghelp', 'Shlwapi', 'rpcrt4','advapi32','Iphlpapi','secur32','crypt32','ws2_32']
     # SysLoggerI.cpp shouldn't be built under Windows.
     def filterName(path):
         b = os.path.basename(path)
         if b == 'SysLoggerI.cpp':
             return False
         return True
+
+else:
+    #
+    # TODO: Get rid of this hack to remove -Wstrict-prototypes from the compiler options
+    # when http://bugs.python.org/issue1222585 is fixed. Note that this hack doesn't work
+    # with recent distutils versions which no longer allow overriding OPT in the env.
+    #
+    from distutils.sysconfig import get_config_vars
+    (opt,) = get_config_vars('OPT')
+    os.environ['OPT'] = " ".join(flag for flag in opt.split() if flag != '-Wstrict-prototypes')
+
+    extra_compile_args.append('-w')
+    extra_link_args = []
+    if use_ice:
+        libraries = ["IceSSL", "Ice", "Slice", "IceUtil"]
+    else:
+        libraries=['ssl', 'crypto', 'bz2', 'rt']
+        if platform is not 'freebsd':
+            libraries.append('dl')
+
+    def filterName(path):
+        d = os.path.dirname(path)
+        if use_ice and d.find("src/ice/") != -1:
+            return False
+        if d.find('bzip2') != -1:
+            return False # Don't compile the bzip2 source under darwin or linux.
+        return True
+
 
 # Gather the list of sources to compile.
 sources = []
@@ -130,7 +134,7 @@ with open('README.rst') as file:
 setup(
     name='zeroc-ice',
 
-    version='3.7.0',
+    version='3.7a3',
 
     description="Ice is a comprehensive RPC framework with support for Python, C++, .NET, Java, JavaScript and more.",
 
@@ -172,6 +176,7 @@ setup(
         'Programming Language :: Python :: 3.2',
         'Programming Language :: Python :: 3.3',
         'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.5',
     ],
 
     # What does your project relate to?
